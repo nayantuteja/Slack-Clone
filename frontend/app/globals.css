@@ -1,0 +1,256 @@
+/* Base styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+.chatbox h1 {
+  text-align: center;
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+  color: white;
+}
+
+/* Message container styling */
+.message-container {
+  position: relative;
+  background-color: #f0f0f0; /* Or whatever background color you need */
+  max-width: 80%;
+  padding: 1px; /* Adjust padding as needed */
+  border-radius: 4px;
+}
+
+.message-container:hover .message-actions {
+  opacity: 1;
+}
+
+/* Message styling */
+.message-container p {
+  word-wrap: break-word;
+  white-space: break-spaces;
+  overflow-x: auto;
+  padding: 1px;
+  font-size: 0.7rem; /* Adjust based on design needs */
+  color: black;
+  background-color: #ececec; /* Message background color */
+}
+
+/* Emoji reaction and options buttons */
+.message-actions {
+  display: flex;
+  gap: 5px; /* Space between buttons */
+  position: absolute;
+  top: -30px; /* Adjust this based on your layout */
+  right: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.emoji-dropdown {
+  display: flex;
+  gap: 5px;
+  background-color: #fff;
+  padding: 5px;
+  border-radius: 5px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  font-size: 24px;
+}
+
+.emoji-reaction {
+  font-size: 24px;
+  cursor: pointer;
+  display: none;
+
+}
+
+.message-container:hover .emoji-reaction {
+  display: flex;
+}
+
+.message-actions button {
+  font-size: 10px;
+  padding: 3px 5px;
+  border-radius: 3px;
+}
+
+.message-actions button.edit {
+  color: black;
+  background-color: #e0e0e0; /* Adjust as needed */
+}
+
+.message-actions button.delete {
+  color: red;
+  background-color: #ffe0e0; /* Adjust as needed */
+}
+
+/* Custom scrollbar styles */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #888 #f0f0f0;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 50px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background-color: #f0f0f0;
+  border-radius: 10px;
+}
+
+/* Chat app styles */
+.chat-app {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.toggle-chat-button {
+  position: fixed;
+  bottom: 5px;
+  right: 10px;
+  z-index: 1000;
+  background-color: #58b6ef;
+  width: 60px;
+  height: 60px;
+  border-radius: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+.chat-window {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 300px;
+  height: 100%;
+  max-height: 80%;
+  transition: transform 0.3s ease;
+  transform: translateY(100%);
+  z-index: 999;
+}
+
+.chat-window.visible {
+  transform: translateY(0);
+}
+
+.chat-window-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Date header styling */
+.date-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.date-header-text {
+  background-color: #f0f0f0;
+  padding: 5px 10px;
+  border-radius: 10px;
+  font-size: 0.9em;
+  color: #666;
+}
+
+/* Editable message styles */
+.editable-message {
+  min-height: 20px;
+  border: 1px solid #ccc;
+  padding: 5px;
+  margin-bottom: 5px;
+}
+
+.save-edit-button,
+.cancel-edit-button {
+  margin-right: 5px;
+  padding: 2px 5px;
+  font-size: 12px;
+}
+
+.reactions-container {
+  display: flex;
+  direction: rtl;
+
+  font-size: 10px;
+}
+.reactions-container1 {
+  display: flex;
+  direction: row-reverse;
+  font-size: 10px;
+}
+
+.content-editable1 {
+  background-color: #dfe4ff;
+  border: 1px solid #e5e5e5;
+}
+.content-editable {
+  box-shadow: none !important;
+  border: none;
+  outline: none;
+}
+
+.word {
+  word-wrap: break-word;
+}
+
+.preserve-whitespace {
+  /* white-space: pre-wrap; Preserves white spaces and line breaks */
+  word-wrap: break-word; /* Breaks long words if necessary */
+  white-space: break-spaces;
+}
+
+.image-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  height: 100%;
+  width: 100%;
+}
+
+.image-viewer-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80vh;
+  width: 80vw;
+  /* height: 80vh;
+  width: 80vw; */
+  /* position: absolute; */
+  /* flex-direction: column; */
+}
+
+.image-viewer-img {
+  max-height: 90% !important;
+  max-width: 90% !important;
+  cursor: grab;
+  /* transform-origin: center; */
+  /* max-height: 60% !important; */
+  /* max-width: 60% !important; */
+  /* width: auto !important; */
+  /* height:auto !important; */
+  /* min-height: 0%; */
+  /* transition: transform 0.2s ease-in-out;
+  z-index: 9999; */
+}
+.editing-message {
+  background-color: #e6f7ff;  /* Light blue background for highlighting */
+  border: 1px solid #1890ff;  /* Add a border to make it stand out */
+  box-shadow: 0px 0px 10px rgba(0, 123, 255, 0.3);  /* Optional shadow */
+}
