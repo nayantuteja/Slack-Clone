@@ -41,7 +41,7 @@ const ChatWindow = (userid) => {
 
 
   useEffect(() => {
-    const newSocket = io("http://localhost:8000/");
+    const newSocket = io("https://slack-clone-yxgl.onrender.com");
     setSocket(newSocket);
     newSocket.on("connect", () => setIsConnected(true));
     newSocket.on("disconnect", () =>{ 
