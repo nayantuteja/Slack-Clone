@@ -157,7 +157,7 @@ io.on("connection", (socket) => {
 
         // Save the updated user to the database
         //console.log("prevsocketid", xsocketid);
-        users.delete(xsocketid);
+        //users.delete(xsocketid);
         users.set(socket.id, user);
         //await existingUser.save();
       } else {
@@ -552,9 +552,9 @@ socket.on("call-user", (data) => {
 
     const userdetails = users.get(socket.id);
     //console.log("userdetails", userdetails, useroncall);
-    const userToCall = Array.from(users.values()).find(
-      (user) => user.id === useroncall.id
-    );
+    const userToCall = Array.from(users.values())
+      .reverse()
+      .find((user) => user.id === useroncall.id);
     if (userToCall) {
       io.to(userToCall.socketId).emit("incoming-call", {
         signal: signalData,
@@ -571,12 +571,14 @@ socket.on("call-user", (data) => {
 
   socket.on("end-call", (targetUserId) => {
     //console.log("targetuserid", targetUserId, users);
-    const targetSocket = Array.from(users.values()).find(
-      (user) => user.id === targetUserId
-    )?.socketId;
-    if (targetSocket) {
-      io.to(targetSocket).emit("call-ended", socket.id);
-    }
+    const targetSockets = Array.from(users.values())
+    .filter((user) => user.id === targetUserId) // Find all users that match the condition
+    .map((user) => user.socketId); // Extract their socketIds
+
+  // Emit to each socketId that satisfies the condition
+  targetSockets.forEach((socketId) => {
+    io.to(socketId).emit("call-ended", socket.id);
+  });
   });
 
   socket.on("disconnect", async () => {
