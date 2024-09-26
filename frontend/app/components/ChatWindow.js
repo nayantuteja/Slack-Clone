@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import io from "socket.io-client";
 import Peer from "peerjs";
+import usePeer from "../hooks/usePeer";
 
 const ChatWindow = (userid) => {
   const [socket, setSocket] = useState(null);
@@ -25,7 +26,7 @@ const ChatWindow = (userid) => {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const peerInstance = useRef(null);
-  const [useroncall, setUserOnCall] = useState(null);
+  const [useroncall, setUserOnCall]=useState(null);
 
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showRemoveUserModal, setShowRemoveUserModal] = useState(false);
@@ -36,48 +37,38 @@ const ChatWindow = (userid) => {
   const [usersInSelectedGroup, setUsersInSelectedGroup] = useState([]);
   const [usersNotInSelectedGroup, setUsersNotInSelectedGroup] = useState([]);
 
+  const { peer, myId } = usePeer();
+
 
   useEffect(() => {
     const newSocket = io("http://localhost:8000/");
     setSocket(newSocket);
     newSocket.on("connect", () => setIsConnected(true));
-    newSocket.on("disconnect", () => {
-      setIsConnected(false)
-      setUserId(null);
+    newSocket.on("disconnect", () =>{ 
+    setIsConnected(false)
+    setUserId(null);
 
-    });
+  });
     return () => newSocket.close();
   }, []);
-
-  const login = useCallback(() => {
-    if (catcherId.trim() !== "" && socket) {
-      socket.emit("login", catcherId);
+  useEffect(()=>{
+    console.log("user", userid)
+    login();
+  },[userid])
+  const login = () => {
+    if ( socket&&userid) {
+      console.log("catcherid", userid.userid);
+      socket.emit("login", userid.userid);
     }
-  }, [socket, catcherId]);
-
+  };
 
   useEffect(() => {
-    if (!socket) return;
-    const peer = new Peer(undefined, {
-      host: "/", // Assuming your PeerJS server is on the same host
-      port: "8000", // The port your server is running on
-      path: "/peerjs/myapp", // The path you set for the PeerJS server
-    });
-
-    peer.on("open", (id) => {
-      console.log("My peer ID is: " + id);
-      setPeerId(id);
-    });
-
-    peerInstance.current = peer;
+    if (!socket || !peer) return;
 
     const handleMessage = (msg) => {
-      //console.log("message",msg);
       setMessages((prevMessages) => {
         const chatId = msg.chatId;
-        if (
-          prevMessages[chatId]?.some((existingMsg) => existingMsg.id === msg.id)
-        ) {
+        if (prevMessages[chatId]?.some((existingMsg) => existingMsg.id === msg.id)) {
           return prevMessages;
         }
         return {
@@ -94,59 +85,6 @@ const ChatWindow = (userid) => {
     socket.on("sub-employee joined", (subEmployee) => {
       setUsers((prevUsers) => [...prevUsers, subEmployee]);
     });
-
-    socket.on("chat message", handleMessage);
-    socket.on("chat history", (history) => {
-      setMessages((prevMessages) => ({
-        ...prevMessages,
-        [history[0]?.chatId]: history,
-      }));
-    });
-    socket.on(
-      "login successful",
-      ({ user, usersWithSameParent, chatHistory }) => {
-        //console.log('Received login successful', { user, usersWithSameParent });
-        setUserId(user.id);
-        setIsConnected(true);
-        setEmployerRoom(`employer-${user.parentId}`);
-        setUsers(usersWithSameParent);
-
-        const organizedHistory = chatHistory.reduce((acc, msg) => {
-          if (!acc[msg.chatId]) {
-            acc[msg.chatId] = [];
-          }
-          acc[msg.chatId].push(msg);
-          return acc;
-        }, {});
-
-        setMessages(organizedHistory);
-      }
-    );
-
-    socket.on("login failed", (error) => {
-      console.error("Login failed:", error);
-      // Handle login failure (e.g., show an error message to the user)
-    });
-
-    socket.on("user joined", (user) =>
-      setUsers((prevUsers) => [...prevUsers, user])
-    );
-    socket.on("user left", (userId) =>
-      setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId))
-    );
-    socket.on("group created", (group) => {
-      setGroups((prevGroups) => [...prevGroups, group]);
-      //console.log("group created", group)
-    });
-    socket.on("group list", setGroups);
-
-    socket.on("incoming-call", handleIncomingCall);
-    socket.on("call-ended", handleCallEnded);
-
-    peer.on("call", handleIncomingPeerCall);
-    socket.on("check-call", handlecheckcall);
-    socket.on("response-final", handlereponsefinal);
-
     socket.on('group updated', (updatedGroupDetails) => {
       //console.log("updategroupdetails",updatedGroupDetails)
       setGroups((prevGroups) => {
@@ -168,7 +106,6 @@ const ChatWindow = (userid) => {
         setUsersNotInSelectedGroup(updatedGroupDetails.usersNotInGroup);
       }
     });
-
     socket.on('user removed from group', (groupId) => {
       setGroups((prevGroups) => prevGroups.filter((group) => group.id !== groupId));
       if (selectedGroup?.id === groupId) {
@@ -176,19 +113,17 @@ const ChatWindow = (userid) => {
         setActiveChat('private');
       }
     });
-
     socket.on('removed from group', (groupId) => {
-      console.log("i am removed from", groupId, selectedGroup)
+      console.log("i am removed from",groupId,selectedGroup)
       setGroups(prevGroups => prevGroups.filter(group => group.id !== groupId));
       // setSelectedGroup(null);
-
+      
       // console.log("i am removed from 2.0",groupId,selectedGroup.id)
       if (selectedGroup && selectedGroup.id === groupId) {
         setSelectedGroup(null);
         setActiveChat('private');
       }
     });
-
     socket.on('added to group', (newGroup) => {
       setGroups((prevGroups) => {
         if (!prevGroups.some((g) => g.id === newGroup.id)) {
@@ -200,7 +135,7 @@ const ChatWindow = (userid) => {
 
     socket.on('group details', (groupDetails) => {
       //console.log('Received group details:', groupDetails);
-
+ 
       // Validate the data to ensure arrays are not empty or undefined
       if (!groupDetails || !Array.isArray(groupDetails.usersInGroup) || !Array.isArray(groupDetails.usersNotInGroup)) {
         console.error('Invalid group details received:', groupDetails);
@@ -208,14 +143,55 @@ const ChatWindow = (userid) => {
         setUsersNotInSelectedGroup([]);
         return;
       }
-
+ 
       // Set the state with validated data
       setUsersInSelectedGroup(groupDetails.usersInGroup);
       setUsersNotInSelectedGroup(groupDetails.usersNotInGroup);
+ 
+      // Additional logging for debugging
+      // console.log('Users in group:', groupDetails.usersInGroup);
+      // console.log('Users not in group:', groupDetails.usersNotInGroup);
     });
-    socket.on('sub-employee joined', (subEmployee) => {
-      setUsers(prevUsers => [...prevUsers, subEmployee]);
+
+    socket.on("chat message", handleMessage);
+    socket.on("chat history", (history) => {
+      setMessages((prevMessages) => ({
+        ...prevMessages,
+        [history[0]?.chatId]: history,
+      }));
     });
+
+    socket.on("login successful", ({ user, usersWithSameParent, chatHistory }) => {
+      setUserId(user.id);
+      setIsConnected(true);
+      setEmployerRoom(`employer-${user.parentId}`);
+      setUsers(usersWithSameParent);
+
+      const organizedHistory = chatHistory.reduce((acc, msg) => {
+        if (!acc[msg.chatId]) {
+          acc[msg.chatId] = [];
+        }
+        acc[msg.chatId].push(msg);
+        return acc;
+      }, {});
+
+      setMessages(organizedHistory);
+    });
+
+    socket.on("login failed", (error) => {
+      console.error("Login failed:", error);
+    });
+
+    socket.on("user joined", (user) => setUsers((prevUsers) => [...prevUsers, user]));
+    socket.on("user left", (userId) => setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId)));
+    socket.on("group created", (group) => setGroups((prevGroups) => [...prevGroups, group]));
+    socket.on("group list", setGroups);
+
+    socket.on("incoming-call", handleIncomingCall);
+    socket.on("call-ended", handleCallEnded);
+    socket.on("check-call",handlecheckcall);
+
+    peer.on("call", handleIncomingPeerCall);
 
     return () => {
       socket.off("chat message", handleMessage);
@@ -227,60 +203,42 @@ const ChatWindow = (userid) => {
       socket.off("group created");
       socket.off("group list");
       socket.off("sub-employee joined");
-
       socket.off("incoming-call", handleIncomingCall);
-      peer.destroy();
       socket.off("call-ended", handleCallEnded);
       socket.off("removed from group");
     };
-  }, [socket, userId, selectedGroup]);
-  const check = () => {
-    socket.emit("check-available", {
-      useroncall: useroncall,
-      signalData: peerId,
-    })
-  }
-  const handlereponsefinal = (data) => {
-    console.log("dataaaaaaaa", data);
-    startCall();
-  }
+  }, [socket, peer,selectedGroup,userId,usersNotInSelectedGroup]);
+  
 
-  const handlecheckcall = (data) => {
-    console.log("remotestream-localstream", remoteStream, localStream, data)
-    socket.emit("response", data);
-  }
-
+  
   const startCall = useCallback(async () => {
+    check()
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setLocalStream(stream);
 
-      const call = peerInstance.current.call(selectedUser.id, stream);
+      const call = peer.call(selectedUser.id, stream);
       call.on("stream", handleStream);
-
+      
       socket.emit("call-user", {
         useroncall: useroncall,
-        signalData: peerId,
+        signalData: myId,
       });
 
       setIsCallActive(true);
     } catch (error) {
       console.error("Error starting call:", error);
     }
-  }, [selectedUser, socket, peerId, useroncall]);
-
+  }, [selectedUser, socket, myId, peer, useroncall]);
+  
   const handleIncomingCall = useCallback((data) => {
-    console.log("rrrrrrrr", useroncall, remoteStream, localStream);
     if (useroncall || localStream) {
-      socket.emit("user-in-call")
-      console.log("data", data);
+      socket.emit("user-in-call");
       return;
     }
-    console.log("incoming call", data);
     setIncomingCall(data);
-    console.log("usersssssss", data.useroncall)
     setUserOnCall(data.useroncall);
-  }, []);
+  }, [useroncall, localStream, socket]);
 
   const handleIncomingPeerCall = useCallback(async (call) => {
     try {
@@ -299,25 +257,19 @@ const ChatWindow = (userid) => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setLocalStream(stream);
 
-      const call = peerInstance.current.call(incomingCall.signal, stream);
+      const call = peer.call(incomingCall.signal, stream);
       call.on("stream", handleStream);
 
-      socket.emit("answer-call", { signal: peerId, to: incomingCall.from });
+      socket.emit("answer-call", { signal: myId, to: incomingCall.from });
       setIsCallActive(true);
       setIncomingCall(null);
     } catch (error) {
       console.error("Error accepting call:", error);
     }
-  }, [incomingCall, socket, peerId]);
-  const calldeclined = () => {
-    setIncomingCall(null);
-    console.log("useroncall", useroncall);
-    endCall();
-  }
+  }, [incomingCall, socket, myId, peer]);
 
   const handleStream = useCallback((remoteStream) => {
     setRemoteStream(remoteStream);
-
   }, []);
 
   const endCall = useCallback(() => {
@@ -327,30 +279,47 @@ const ChatWindow = (userid) => {
     setLocalStream(null);
     setRemoteStream(null);
     setIsCallActive(false);
-
-    // Notify the other peer that the call has ended
+    
     socket.emit("end-call", useroncall.id);
-    setUserOnCall(null);
-  }, [localStream, selectedUser, socket, useroncall]);
+    console.log("select",selectedUser);
+    //setUserOnCall(null);
+  }, [localStream, socket, useroncall]);
 
   const handleCallEnded = useCallback(() => {
-    console.log("call-ended");
+    console.log("selecteduser", selectedUser);
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
     }
     if (remoteStream) {
       remoteStream.getTracks().forEach((track) => track.stop());
     }
-
-    console.log("remotestream ended", remoteStream, localStream);
+  
     setLocalStream(null);
     setRemoteStream(null);
     setIsCallActive(false);
-    setUserOnCall(null);
+    //setUserOnCall(null);
+  }, [localStream, remoteStream]);
+  
+  const check=()=>{
+    socket.emit("check-available",{
+      useroncall: useroncall,
+      signalData: peerId,
+    })
+  }
+  const handlereponsefinal=(data)=>{
+    console.log("dataaaaaaaa",data);
+    startCall();
+  }
+  const calldeclined=()=>{
+    setIncomingCall(null);
+    console.log("useroncall", useroncall);
+    endCall();
+  }
 
-    console.log("switch-off call");
-  }, [endCall, localStream]);
-
+  const handlecheckcall=useCallback((data)=>{
+    console.log("remotestream-localstream",isCallActive,data)
+    //socket.emit ("response", data);
+  },[isCallActive]);  
 
   const addUserToGroup = useCallback((userIdToAdd) => {
     if (socket && selectedGroup) {
@@ -376,7 +345,7 @@ const ChatWindow = (userid) => {
   };
 
   useEffect(() => {
-    console.log("remote stream", remoteStream, localStream);
+    console.log("remote stream", remoteStream,localStream);
   }, [remoteStream]);
 
   const sendMessage = useCallback(() => {
@@ -389,8 +358,8 @@ const ChatWindow = (userid) => {
           activeChat === "private"
             ? getChatId(userId, selectedUser?.id)
             : activeChat === "group"
-              ? `group-${selectedGroup?.id}`
-              : employerRoom,
+            ? `group-${selectedGroup?.id}`
+            : employerRoom,
         receiver: activeChat === "private" ? selectedUser?.id : undefined,
       };
 
@@ -418,7 +387,7 @@ const ChatWindow = (userid) => {
 
   const selectUser = (user) => {
     setSelectedUser(user);
-    if (!useroncall) {
+    if(!useroncall){
       setUserOnCall(user);
     }
     setActiveChat("private");
@@ -463,37 +432,37 @@ const ChatWindow = (userid) => {
     activeChat === "private" && selectedUser
       ? getChatId(userId, selectedUser.id)
       : activeChat === "group" && selectedGroup
-        ? `group-${selectedGroup.id}`
-        : employerRoom;
+      ? `group-${selectedGroup.id}`
+      : employerRoom;
 
   const currentMessages = currentChatId ? messages[currentChatId] || [] : [];
 
-  useEffect(() => {
-    console.log("sleevctede group val", selectedGroup);
-  }, [selectedGroup])
+  // useEffect(()=>{
+  //   console.log("sleevctede group val", selectedGroup);
+  // },[selectedGroup])
   // ... (rest of the component logic remains the same)
 
-  if (!isConnected || !userId) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="w-64">
-          <input
-            type="text"
-            value={catcherId}
-            onChange={(e) => setCatcherId(e.target.value)}
-            placeholder="Enter your Catcher ID"
-            className="w-full px-3 py-2 border rounded mb-4"
-          />
-          <button
-            onClick={login}
-            className="w-full bg-blue-500 text-white px-4 py-2 rounded"
-          >
-            Login
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // if (!isConnected || !userId) {
+  //   return (
+  //     <div className="flex items-center justify-center h-screen">
+  //       <div className="w-64">
+  //         <input
+  //           type="text"
+  //           value={catcherId}
+  //           onChange={(e) => setCatcherId(e.target.value)}
+  //           placeholder="Enter your Catcher ID"
+  //           className="w-full px-3 py-2 border rounded mb-4"
+  //         />
+  //         <button
+  //           onClick={login}
+  //           className="w-full bg-blue-500 text-white px-4 py-2 rounded"
+  //         >
+  //           Login
+  //         </button>
+  //       </div>
+  //     </div>
+  //   );
+  // }
   const renderAddUserModal = () => {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
@@ -546,7 +515,7 @@ const ChatWindow = (userid) => {
       </div>
     );
   };
-
+ 
 
   // Render the remove user modal
   const renderRemoveUserModal = () => {
@@ -601,7 +570,7 @@ const ChatWindow = (userid) => {
       </div>
     );
   };
-
+ 
 
 
   return (
@@ -656,17 +625,19 @@ const ChatWindow = (userid) => {
       <div className="w-1/3 mr-4">
         <div className="mb-4">
           <button
-            className={`px-4 py-2 mr-2 ${activeChat === "private"
+            className={`px-4 py-2 mr-2 ${
+              activeChat === "private"
                 ? "bg-blue-500 text-white"
                 : "bg-gray-200"
-              }`}
+            }`}
             onClick={() => setActiveChat("private")}
           >
             Users
           </button>
           <button
-            className={`px-4 py-2 mr-2 ${activeChat === "group" ? "bg-blue-500 text-white" : "bg-gray-200"
-              }`}
+            className={`px-4 py-2 mr-2 ${
+              activeChat === "group" ? "bg-blue-500 text-white" : "bg-gray-200"
+            }`}
             onClick={() => setActiveChat("group")}
           >
             Groups
@@ -688,8 +659,9 @@ const ChatWindow = (userid) => {
                 .map((user) => (
                   <div
                     key={user.id}
-                    className={`flex items-center p-2 cursor-pointer hover:bg-gray-100 ${selectedUser?.id === user.id ? "bg-gray-200" : ""
-                      }`}
+                    className={`flex items-center p-2 cursor-pointer hover:bg-gray-100 ${
+                      selectedUser?.id === user.id ? "bg-gray-200" : ""
+                    }`}
                     onClick={() => selectUser(user)}
                   >
                     <span>
@@ -708,8 +680,9 @@ const ChatWindow = (userid) => {
               {groups.map((group) => (
                 <div
                   key={group.id}
-                  className={`p-2 cursor-pointer hover:bg-gray-100 ${selectedGroup?.id === group.id ? "bg-gray-200" : ""
-                    }`}
+                  className={`p-2 cursor-pointer hover:bg-gray-100 ${
+                    selectedGroup?.id === group.id ? "bg-gray-200" : ""
+                  }`}
                   onClick={() => selectGroup(group)}
                 >
                   {group.name}
@@ -748,35 +721,43 @@ const ChatWindow = (userid) => {
             {activeChat === "private" && selectedUser
               ? `Chat with ${selectedUser.username}`
               : activeChat === "group" && selectedGroup
-                ? `Group: ${selectedGroup.name}`
-                : activeChat === "employer"
-                  ? "Employer Room"
-                  : "Select a user, group, or room to chat"}
+              ? `Group: ${selectedGroup.name}`
+              : activeChat === "employer"
+              ? "Employer Room"
+              : "Select a user, group, or room to chat"}
           </h2>
 
+          
+            <div className="mt-4">
+            {
+              !isCallActive ?(
+                selectedUser&& (
+                  <button
+                    onClick={startCall}
+                    className="bg-green-500 text-white px-4 py-2 rounded mr-2"
+                  >
+                    Start Voice Call
+                  </button>
+                )
 
-          <div className="mt-4">
-            {!isCallActive && selectedUser && (
-              <button
-                onClick={startCall}
-                className="bg-green-500 text-white px-4 py-2 rounded mr-2"
-              >
-                Start Voice Call
-              </button>
-            )}
-            {isCallActive && useroncall && (
-              <button
-                onClick={endCall}
-                className="bg-red-500 text-white px-4 py-2 rounded"
-              >
-                End Call
-              </button>
-            )}
-          </div>
-
+              ):(
+               useroncall&& (
+                  <button
+                    onClick={endCall}
+                    className="bg-red-500 text-white px-4 py-2 rounded"
+                  >
+                    End Call
+                  </button>
+                )
+              )
+            }
+              
+              
+            </div>
+      
           {isCallActive && (
             <div className="mt-4  flex flex-col">
-              <p className="h-[10px]">Call in progress with {useroncall.username} </p>
+              <p className="h-[10px]">Call in progress with  </p>
               <audio
                 ref={(audio) => {
                   if (audio && remoteStream) {
@@ -793,8 +774,9 @@ const ChatWindow = (userid) => {
           {currentMessages.map((message, index) => (
             <div
               key={index}
-              className={`mb-2 ${message.sender === userId ? "text-right" : "text-left"
-                }`}
+              className={`mb-2 ${
+                message.sender === userId ? "text-right" : "text-left"
+              }`}
             >
               <span className="font-bold">
                 {message.sender === userId

@@ -6,26 +6,21 @@ import ChatWindow from './components/ChatWindow'; // Adjust the path if needed
 // Main Home component
 const Home = () => {
   const searchParams = useSearchParams();
-  const [appId, setAppId] = useState('defaul-app');
-  const [roomId,setRoomId]= useState('room');
-  const [user,setUser]= useState('usefr');
+  const [userid,setUserId]= useState('');
 
   useEffect(() => {
-    const appIdFromUrl = searchParams.get('appId');
-    const roomIdFromUrl=searchParams.get('roomId');
-    const userFromUrl= searchParams.get('user');
-    if (appIdFromUrl) {
-      setAppId(appIdFromUrl);
-      setRoomId(roomIdFromUrl);
-      setUser(userFromUrl);
+    
+    const userFromUrl= searchParams.get('userid');
+    if (userFromUrl) {
+      setUserId(userFromUrl);
     }
   }, [searchParams]);
 
-  console.log("AppId being used:", appId);
+  console.log("AppId being used:", userid);
 
   return (
-    <div>
-      <ChatWindow/>
+    <div className='h-100%'>
+      <ChatWindow userid={userid}/>
     </div>
   );
 };
