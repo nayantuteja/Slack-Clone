@@ -6,8 +6,6 @@ import { v4 as uuidv4 } from "uuid";
 import { ExpressPeerServer } from "peer";
 import dotenv from "dotenv";
 import { Socket } from "dgram";
-const activeGroupCalls = new Map();
-
 dotenv.config();
 const app = express();
 const server = createServer(app);
@@ -162,7 +160,6 @@ io.on("connection", (socket) => {
         //await existingUser.save();
       } else {
         const newUser = new User(user);
-        //await newUser.save();
         users.set(socket.id, user);
       }
 
@@ -188,11 +185,6 @@ io.on("connection", (socket) => {
 
       const roomId = `employer-${user.parentId}`;
       socket.join(roomId);
-      //console.log(`${user.userType} ${user.username} joined room ${roomId}`);
-      //const groupList = await Group.find({ members: { $in: employee.catcher_id } });
-      //io.to(user.socketId).emit("group list", groupList);
-
-      //const userGroups = await Group.find({ members: user.id });
 
       // Update the groups map with fetched groups from MongoDB
       userGroups.forEach((group) => {
@@ -235,7 +227,6 @@ io.on("connection", (socket) => {
     // Save the group to the database
     const savedGroup = new Group(newGroup);
     await savedGroup.save();
-
     groups.set(groupId, newGroup);
 
     newGroup.members.forEach((memberId) => {
@@ -246,7 +237,7 @@ io.on("connection", (socket) => {
       }
     });
 
-    await updateGroupList(newGroup.members);
+    await updateGroupList(newGroup.members); 
   });
   const getGroupDetails = async (groupId, allUsers) => {
     const group = await Group.findOne({ id: groupId });
@@ -382,21 +373,15 @@ io.on("connection", (socket) => {
 
       if (group) {
         // Fetch users from dummy data based on parentId
-
         const allUsers = dummyEmployees.employees
-
           .filter((emp) => emp.parent_id === group.parentId)
-
           .map((emp) => ({
             id: emp.catcher_id,
-
             username: emp.name,
-
             userType: emp.type_id === 1 ? "employer" : "sub-employee",
           }));
 
         // Find users in the group and those not in the group
-
         const usersInGroup = allUsers.filter((user) =>
           group.members.includes(user.id)
         );
@@ -406,22 +391,12 @@ io.on("connection", (socket) => {
         );
 
         // Emit the group details to the client
-
         socket.emit("group details", {
           id: group.id,
-
           usersInGroup,
-
           usersNotInGroup,
         });
 
-        // console.log("Fetched group details:", {
-        //   id: group.id,
-
-        //   usersInGroup,
-
-        //   usersNotInGroup,
-        // });
       } else {
         socket.emit("error", "Group not found.");
       }
@@ -543,40 +518,44 @@ io.on("connection", (socket) => {
     io.to(data.from).emit("response-final", data);
     //console.log("ddddd", data);
   });
-socket.on("call-user", (data) => {
-  console.log("usrs",users)
-  //console.log("data", data);
-  const { useroncall, signalData } = data;
-  console.log("usersonccall", useroncall);
-  if (useroncall&&useroncall.id) {
 
-    const userdetails = users.get(socket.id);
-    //console.log("userdetails", userdetails, useroncall);
-    const userToCall = Array.from(users.values()).find(
-      (user) => user.id === useroncall.id
-    );
-    if (userToCall) {
-      io.to(userToCall.socketId).emit("incoming-call", {
-        signal: signalData,
-        from: socket.id,
-        useroncall: userdetails,
-      });
+
+  socket.on("call-user", (data) => {
+    console.log("usrs", users);
+    //console.log("data", data);
+    const { useroncall, signalData } = data;
+    console.log("usersonccall", useroncall);
+    if (useroncall && useroncall.id) {
+      const userdetails = users.get(socket.id);
+      //console.log("userdetails", userdetails, useroncall);
+      const userToCall = Array.from(users.values())
+        .reverse()
+        .find((user) => user.id === useroncall.id);
+
+      if (userToCall) {
+        io.to(userToCall.socketId).emit("incoming-call", {
+          signal: signalData,
+          from: socket.id,
+          useroncall: userdetails,
+        });
+      }
     }
-  }
-});
-
+  });
+  
   socket.on("answer-call", (data) => {
     io.to(data.to).emit("call-accepted", data.signal);
   });
 
   socket.on("end-call", (targetUserId) => {
     //console.log("targetuserid", targetUserId, users);
-    const targetSocket = Array.from(users.values()).find(
-      (user) => user.id === targetUserId
-    )?.socketId;
-    if (targetSocket) {
-      io.to(targetSocket).emit("call-ended", socket.id);
-    }
+    const targetSockets = Array.from(users.values())
+      .filter((user) => user.id === targetUserId) // Find all users that match the condition
+      .map((user) => user.socketId); // Extract their socketIds
+
+    // Emit to each socketId that satisfies the condition
+    targetSockets.forEach((socketId) => {
+      io.to(socketId).emit("call-ended", socket.id);
+    });
   });
 
   socket.on("disconnect", async () => {
