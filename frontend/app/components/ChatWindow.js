@@ -6,11 +6,11 @@ import usePeer from "../hooks/usePeer";
 const ChatWindow = (userid) => {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [catcherId, setCatcherId] = useState("");
+  //const [catcherId, setCatcherId] = useState("");
   const [userId, setUserId] = useState(null);
   const [users, setUsers] = useState([]);
   const [messages, setMessages] = useState({});
-  const [inputMessage, setInputMessage] = useState("");
+  //const [inputMessage, setInputMessage] = useState("");
   const [activeChat, setActiveChat] = useState("employer");
   const [selectedUser, setSelectedUser] = useState(null);
   const [groups, setGroups] = useState([]);
@@ -25,7 +25,7 @@ const ChatWindow = (userid) => {
   const [incomingCall, setIncomingCall] = useState(null);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
-  const peerInstance = useRef(null);
+  //const peerInstance = useRef(null);
   const [useroncall, setUserOnCall] = useState(null);
 
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -51,22 +51,23 @@ const ChatWindow = (userid) => {
   const [isHolding, setIsHolding] = useState(false);
   const [dragStartPoint, setDragStartPoint] = useState({ x: 0, y: 0 });
   const [imageDragging, setImageDragging] = useState(false);
+  const [usersoncall, setUsersOnCall] = useState([]);
 
 
 
 
   useEffect(() => {
-    console.log("1")
+    //console.log("1")
     const isMobile = window.matchMedia("(max-width: 768px)").matches;
     console.log("Mobile", isMobile)
     setMaxZoom(isMobile ? 10 : 2);
   }, []);
 
   useEffect(() => {                      // Centers the image when it is viewed and adjusts the position on window resize.
-    console.log("3")
+    //console.log("3")
     if (viewingImage) {
       const handleResize = () => {
-        console.log("chalaaa")
+        //console.log("chalaaa")
         if (imageRef.current) {                // check if the image element is available
           // imgRect will be an object containing properties like width and height.
           const imgRect = imageRef.current.getBoundingClientRect();  //getBoundingClientRect() provides the size of the image and its position relative to the viewport.
@@ -74,10 +75,10 @@ const ChatWindow = (userid) => {
           const viewportHeight = window.innerHeight;
           const imgWidth = imgRect.width;
           const imgHeight = imgRect.height;
-          console.log("check", viewportWidth, viewportHeight)
-          console.log("check2", imgWidth, imgHeight)
-          console.log("container pos x, y", (viewportWidth - imgWidth) / 2, (viewportHeight - imgHeight) / 2)
-          console.log("container pos x, y", (viewportWidth - imgWidth), (viewportHeight - imgHeight))
+          // console.log("check", viewportWidth, viewportHeight)
+          // console.log("check2", imgWidth, imgHeight)
+          // console.log("container pos x, y", (viewportWidth - imgWidth) / 2, (viewportHeight - imgHeight) / 2)
+          // console.log("container pos x, y", (viewportWidth - imgWidth), (viewportHeight - imgHeight))
           setImagePosition({                        // Calculate initial position to center the image
             x: (viewportWidth - imgWidth) / 2,
             y: (viewportHeight - imgHeight) / 2
@@ -96,7 +97,7 @@ const ChatWindow = (userid) => {
 
 
   useEffect(() => {
-    console.log("4")
+    //console.log("4")
     const handleScroll = (e) => {
       if (viewingImage) {
         e.preventDefault();
@@ -297,12 +298,12 @@ const ChatWindow = (userid) => {
     setIsHolding(true);
     setDragStartPoint({ x: e.clientX, y: e.clientY });
     setImageDragging(false);
-    console.log("Hold chexk", isHolding)
+    //console.log("Hold chexk", isHolding)
   };
 
   const handleMouseMove = (e) => {
     if (!isHolding) return;
-    console.log("holding check agian", isHolding)
+    //console.log("holding check agian", isHolding)
 
     const dx = e.clientX - dragStartPoint.x;
     const dy = e.clientY - dragStartPoint.y;
@@ -321,7 +322,7 @@ const ChatWindow = (userid) => {
   };
 
   const handleMouseUp = () => {
-    console.log("working")
+    //console.log("working")
     if (isHolding && !imageDragging) {
       // This was a click, not a drag
       setZoom(1);
@@ -417,10 +418,15 @@ const ChatWindow = (userid) => {
     );
   };
 
-
-
+  // useEffect(() => {
+  //   console.log('Connection status changed:', isConnected);
+  //   console.log('User ID:', userId);
+  // }, [isConnected, userId]);
+  // useEffect(()=>{
+  //   //console.log("userid", userid)
+  // },[userid])
   useEffect(() => {
-    const newSocket = io("https://slack-clone-yxgl.onrender.com");
+    const newSocket = io("http://localhost:8000");
     setSocket(newSocket);
     newSocket.on("connect", () => setIsConnected(true));
     newSocket.on("disconnect", () => {
@@ -428,18 +434,24 @@ const ChatWindow = (userid) => {
       setUserId(null);
 
     });
-    return () => newSocket.close();
+
   }, []);
   useEffect(() => {
-    console.log("user", userid)
+    //console.log("user", userid)
     login();
   }, [userid])
   const login = () => {
     if (socket && userid) {
-      console.log("catcherid", userid.userid);
+      //console.log("catcherid", userid.userid);
       socket.emit("login", userid.userid);
     }
   };
+
+
+
+
+
+
 
   useEffect(() => {
     if (!socket || !peer) return;
@@ -458,6 +470,7 @@ const ChatWindow = (userid) => {
     };
 
     socket.on("user list", (userList) => {
+      //console.log("userlist",userList);
       setUsers(userList);
     });
 
@@ -493,7 +506,7 @@ const ChatWindow = (userid) => {
       }
     });
     socket.on('removed from group', (groupId) => {
-      console.log("i am removed from", groupId, selectedGroup)
+      //console.log("i am removed from",groupId,selectedGroup)
       setGroups(prevGroups => prevGroups.filter(group => group.id !== groupId));
       // setSelectedGroup(null);
 
@@ -527,9 +540,6 @@ const ChatWindow = (userid) => {
       setUsersInSelectedGroup(groupDetails.usersInGroup);
       setUsersNotInSelectedGroup(groupDetails.usersNotInGroup);
 
-      // Additional logging for debugging
-      // console.log('Users in group:', groupDetails.usersInGroup);
-      // console.log('Users not in group:', groupDetails.usersNotInGroup);
     });
 
     socket.on("chat message", handleMessage);
@@ -572,6 +582,31 @@ const ChatWindow = (userid) => {
 
     peer.on("call", handleIncomingPeerCall);
 
+    socket.on("i am on call", (callingsockets) => {
+      console.log("data", callingsockets[0], callingsockets[1]);
+      for (let i = 0; i < callingsockets.length; i++) {
+        setUsersOnCall(prevusersoncall => [...prevusersoncall, callingsockets[i]]);
+      }
+
+    })
+
+    socket.on("call-list-update", handlecalllistupdate)
+
+    socket.on("incoming-group-call", (data) => {
+      console.log(`Incoming group call from user ${data.from} in group ${data.groupId}`);
+      setIncomingCall(data);
+    });
+  
+    socket.on("group-call-accepted", (signal) => {
+      console.log("Group call accepted. Connecting streams...");
+      peer.signal(signal);
+    });
+  
+    socket.on("group-call-ended", () => {
+      console.log("Group call ended");
+      endCall();
+    });
+
     return () => {
       socket.off("chat message", handleMessage);
       socket.off("login successful");
@@ -585,13 +620,21 @@ const ChatWindow = (userid) => {
       socket.off("incoming-call", handleIncomingCall);
       socket.off("call-ended", handleCallEnded);
       socket.off("removed from group");
+      socket.off("i am on call")
     };
   }, [socket, peer, selectedGroup, userId, usersNotInSelectedGroup]);
 
+  useEffect(() => {
+    if (selectedUser && usersoncall) {
+      console.log("userconcall", usersoncall, selectedUser.socketId);
+      console.log("typeof", typeof (usersoncall[0]), typeof (selectedUser.socketId), usersoncall[1]);
+    }
 
+  }, [usersoncall, selectedUser])
 
   const startCall = useCallback(async () => {
-    check()
+    //check()
+    console.log("started-call");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setLocalStream(stream);
@@ -611,6 +654,7 @@ const ChatWindow = (userid) => {
   }, [selectedUser, socket, myId, peer, useroncall]);
 
   const handleIncomingCall = useCallback((data) => {
+    console.log("incomingcall");
     if (useroncall || localStream) {
       socket.emit("user-in-call");
       return;
@@ -620,6 +664,7 @@ const ChatWindow = (userid) => {
   }, [useroncall, localStream, socket]);
 
   const handleIncomingPeerCall = useCallback(async (call) => {
+    console.log("handleincomingpeercall");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setLocalStream(stream);
@@ -632,6 +677,7 @@ const ChatWindow = (userid) => {
   }, []);
 
   const acceptCall = useCallback(async () => {
+    console.log("acceptcalll")
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setLocalStream(stream);
@@ -647,7 +693,9 @@ const ChatWindow = (userid) => {
     }
   }, [incomingCall, socket, myId, peer]);
 
+
   const handleStream = useCallback((remoteStream) => {
+    console.log("handlestream")
     setRemoteStream(remoteStream);
   }, []);
 
@@ -660,12 +708,12 @@ const ChatWindow = (userid) => {
     setIsCallActive(false);
 
     socket.emit("end-call", useroncall.id);
-    console.log("select", selectedUser);
+    //console.log("select",selectedUser);
     //setUserOnCall(null);
   }, [localStream, socket, useroncall]);
 
   const handleCallEnded = useCallback(() => {
-    console.log("selecteduser", selectedUser);
+    //console.log("selecteduser", selectedUser);
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
     }
@@ -680,19 +728,39 @@ const ChatWindow = (userid) => {
     //setUserOnCall(null);
   }, [localStream, remoteStream]);
 
-  const check = () => {
-    socket.emit("check-available", {
-      useroncall: useroncall,
-      signalData: peerId,
-    })
-  }
-  const handlereponsefinal = (data) => {
-    console.log("dataaaaaaaa", data);
-    startCall();
-  }
+  const startGroupCall = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log("Local stream started for group call", stream);
+      setLocalStream(stream);
+      selectedGroup.members.forEach(member => {
+        console.log(`Notifying group member ${member.id} about the group call`);
+        socket.emit("start-group-call", {
+          groupId: selectedGroup.id,
+          signalData: myId,
+        });
+      });
+      setIsCallActive(true);
+    } catch (error) {
+      console.error("Error starting group call:", error);
+    }
+  };
+  
+
+
+  // const check=()=>{
+  //   socket.emit("check-available",{
+  //     useroncall: useroncall,
+  //     signalData: peerId,
+  //   })
+  // }
+  // const handlereponsefinal=(data)=>{
+  //   //console.log("dataaaaaaaa",data);
+  //   startCall();
+  // }
   const calldeclined = () => {
     setIncomingCall(null);
-    console.log("useroncall", useroncall);
+    //console.log("useroncall", useroncall);
     endCall();
   }
 
@@ -700,6 +768,14 @@ const ChatWindow = (userid) => {
     console.log("remotestream-localstream", isCallActive, data)
     //socket.emit ("response", data);
   }, [isCallActive]);
+
+  const handlecalllistupdate = (data1, data2) => {
+    console.log("dadaaadadaataaaaa", data1, data2);
+    setUsersOnCall(prevusersoncall => prevusersoncall.filter(usersoncall => usersoncall !== data1));
+    for (let i = 0; i < data2.length; i++) {
+      setUsersOnCall(prevusersoncall => prevusersoncall.filter(usersoncall => usersoncall !== data2[i]));
+    }
+  }
 
   const addUserToGroup = useCallback((userIdToAdd) => {
     if (socket && selectedGroup) {
@@ -724,9 +800,7 @@ const ChatWindow = (userid) => {
     return [user1, user2].sort().join("-");
   };
 
-  useEffect(() => {
-    console.log("remote stream", remoteStream, localStream);
-  }, [remoteStream]);
+
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -773,6 +847,7 @@ const ChatWindow = (userid) => {
 
   const selectUser = (user) => {
     setSelectedUser(user);
+    console.log("user", user);
     // if(!useroncall){
     setUserOnCall(user);
     //}
@@ -807,6 +882,8 @@ const ChatWindow = (userid) => {
       setShowCreateGroupModal(false);
     }
   }, [socket, newGroupName, selectedUsersForGroup, userId]);
+
+
 
   const toggleUserForGroup = (userId) => {
     setSelectedUsersForGroup((prev) => ({
@@ -937,8 +1014,6 @@ const ChatWindow = (userid) => {
   return (
     <div className=" h-screen w-screen">
       <div className="flex h-screen max-w-4xl mx-auto p-4">
-
-
         {incomingCall && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
             <div className="bg-white p-4 rounded">
@@ -977,18 +1052,20 @@ const ChatWindow = (userid) => {
               Users
             </button>
             <button
-              className={`px-4 py-2 mr-2 ${activeChat === "group" ? "bg-blue-500 text-white" : "bg-gray-200"
+              className={`px-4 py-2 mr-2 ${activeChat === "group"
+                ? "bg-blue-500 text-white"
+                : "bg-gray-200"
                 }`}
               onClick={() => setActiveChat("group")}
             >
               Groups
             </button>
-            <button
-              className={`px-4 py-2 ${activeChat === 'employer' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-              onClick={() => setActiveChat('employer')}
-            >
-              Employer Room
-            </button>
+            {/* <button
+          className={`px-4 py-2 ${activeChat === 'employer' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          onClick={() => setActiveChat('employer')}
+        >
+          Employer Room
+        </button> */}
           </div>
 
           {activeChat === "private" && (
@@ -1066,37 +1143,54 @@ const ChatWindow = (userid) => {
                     : "Select a user, group, or room to chat"}
             </h2>
 
-
             <div className="mt-4">
-              {
-                !isCallActive ? (
-                  selectedUser && (
+              {!isCallActive ? (
+                selectedUser ? (
+                  usersoncall.includes(String(selectedUser.socketId)) ? (
+                    <p className="text-red-500">
+                      User is on another call
+                    </p>
+                  ) : (
                     <button
                       onClick={startCall}
                       className="bg-green-500 text-white px-4 py-2 rounded mr-2"
                     >
-                      Start Voice Call
+                      start Call
                     </button>
                   )
+                ) : selectedGroup ? (
+                  // usersoncall.includes(String(selectedUser.socketId)) ? (
+                  //   <p className="text-red-500">
+                  //     User is not available for call
+                  //   </p>
+                  // ) : (
+                  <button
+                    onClick={startGroupCall}
+                    className="bg-green-500 text-white px-4 py-2 rounded mr-2"
+                  >
+                    Start Group Call
+                  </button>
 
+                  //)
                 ) : (
-                  useroncall && (
-                    <button
-                      onClick={endCall}
-                      className="bg-red-500 text-white px-4 py-2 rounded"
-                    >
-                      End Call
-                    </button>
-                  )
+                  <h>no user selected</h>
                 )
-              }
 
-
+              ) : (
+                useroncall && (
+                  <button
+                    onClick={endCall}
+                    className="bg-red-500 text-white px-4 py-2 rounded"
+                  >
+                    End Call
+                  </button>
+                )
+              )}
             </div>
 
             {isCallActive && (
               <div className="mt-4  flex flex-col">
-                <p className="h-[10px]">Call in progress with  </p>
+                <p className="h-[10px]">Call in progress with </p>
                 <audio
                   ref={(audio) => {
                     if (audio && remoteStream) {
@@ -1109,11 +1203,12 @@ const ChatWindow = (userid) => {
             )}
           </div>
 
-          <div className="border  flex flex-col-reverse p-1 overflow-auto custom-scrollbar">
+          <div className="flex-grow mb-4 border rounded p-2 overflow-y-auto">
             {currentMessages.map((message, index) => (
               <div
                 key={index}
-                className={`mb-2 ${message.sender === userId ? "text-right" : "text-left"}`}
+                className={`mb-2 ${message.sender === userId ? "text-right" : "text-left"
+                  }`}
               >
                 <span className="font-bold ">
                   {message.sender === userId
@@ -1128,14 +1223,13 @@ const ChatWindow = (userid) => {
             ))}
           </div>
 
-          <div className="flex">
+          <div className="flex w-[100px]">
             <form
               onSubmit={handleSubmit}
               onDrop={handleDrop}
               onDragOver={handleDragOver}
-              className="w-full"
             >
-              <div className="flex p-3 items-end space-x-1 w-full">
+              <div className="flex p-3 items-end space-x-1 w-[500px]">
                 <input
                   type="file"
                   multiple
@@ -1154,13 +1248,17 @@ const ChatWindow = (userid) => {
                   className="flex-grow bg-white border preserve-whitespace rounded-lg px-4 py-2"
                   placeholder="Type your message..."
                   style={{
-                    whiteSpace: 'break-spaces',
-                    overflowWrap: 'break-word',
-                    overflowY: 'auto',
-                    maxHeight: '150px', // Adjust the max height to fit your needs
+                    //whiteSpace: 'pre-wrap',
+                    whiteSpace: "break-spaces",
+                    overflowWrap: "break-word",
+                    overflowY: "auto",
+                    maxHeight: "150px", // Adjust the max height to fit your needs
                   }}
                 />
-                <label htmlFor="fileInput" className="cursor-pointer flex-shrink-0">
+                <label
+                  htmlFor="fileInput"
+                  className="cursor-pointer flex-shrink-0"
+                >
                   <img
                     src="https://www.svgrepo.com/show/490988/attachment.svg"
                     alt="Attachment"
@@ -1177,7 +1275,6 @@ const ChatWindow = (userid) => {
               </div>
             </form>
           </div>
-
         </div>
 
         {showCreateGroupModal && (
@@ -1240,7 +1337,9 @@ const ChatWindow = (userid) => {
           <div
             className="image-viewer-container"
             onMouseUp={handleMouseUp}
-            onClick={(e) => e.currentTarget === e.target && setViewingImage(null)}
+            onClick={(e) =>
+              e.currentTarget === e.target && setViewingImage(null)
+            }
           >
             <img
               ref={imageRef}
@@ -1248,11 +1347,11 @@ const ChatWindow = (userid) => {
               alt="Viewing"
               className="image-viewer-img"
               style={{
-                position: 'absolute',
+                position: "absolute",
                 top: `${imagePosition.y}px`,
                 left: `${imagePosition.x}px`,
                 transform: `scale(${zoom})`,
-                cursor: isHolding ? 'grabbing' : 'grab',
+                cursor: isHolding ? "grabbing" : "grab",
               }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
