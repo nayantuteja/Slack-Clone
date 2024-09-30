@@ -22,13 +22,13 @@ const peerServer = ExpressPeerServer(server, {
 
 app.use("/peerjs", peerServer);
 
-// MongoDB connection setup
-const mongoURI =
-  "mongodb+srv://nayantuteja:00hofBhyJnOOx5Mr@cluster0.ov6sp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-mongoose
-  .connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+  // MongoDB connection setup
+  const mongoURI =
+    "mongodb+srv://nayantuteja:00hofBhyJnOOx5Mr@cluster0.ov6sp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+  mongoose
+    .connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log("MongoDB connected"))
+    .catch((err) => console.error("MongoDB connection error:", err));
 
 // Define MongoDB Schemas and Models
 const userSchema = new mongoose.Schema({
@@ -61,6 +61,7 @@ const Message = mongoose.model("Message", messageSchema);
 
 const users = new Map();
 const groups = new Map();
+let callingsockets =[];
 
 // Dummy database
 const dummyEmployees = {
@@ -160,6 +161,7 @@ io.on("connection", (socket) => {
         //await existingUser.save();
       } else {
         const newUser = new User(user);
+        //await newUser.save();
         users.set(socket.id, user);
       }
 
@@ -185,6 +187,11 @@ io.on("connection", (socket) => {
 
       const roomId = `employer-${user.parentId}`;
       socket.join(roomId);
+      //console.log(`${user.userType} ${user.username} joined room ${roomId}`);
+      //const groupList = await Group.find({ members: { $in: employee.catcher_id } });
+      //io.to(user.socketId).emit("group list", groupList);
+
+      //const userGroups = await Group.find({ members: user.id });
 
       // Update the groups map with fetched groups from MongoDB
       userGroups.forEach((group) => {
@@ -194,6 +201,7 @@ io.on("connection", (socket) => {
 
       // Emit the group list to the user
       io.to(user.socketId).emit("group list", userGroups);
+      io.to(user.socketId).emit("i am on call",callingsockets);
 
       if (user.userType === "sub-employee") {
         const employerSocket = Array.from(users.values()).find(
@@ -227,6 +235,7 @@ io.on("connection", (socket) => {
     // Save the group to the database
     const savedGroup = new Group(newGroup);
     await savedGroup.save();
+
     groups.set(groupId, newGroup);
 
     newGroup.members.forEach((memberId) => {
@@ -237,7 +246,7 @@ io.on("connection", (socket) => {
       }
     });
 
-    await updateGroupList(newGroup.members); 
+    await updateGroupList(newGroup.members);
   });
   const getGroupDetails = async (groupId, allUsers) => {
     const group = await Group.findOne({ id: groupId });
@@ -518,13 +527,13 @@ io.on("connection", (socket) => {
     io.to(data.from).emit("response-final", data);
     //console.log("ddddd", data);
   });
-
-
   socket.on("call-user", (data) => {
     console.log("usrs", users);
     //console.log("data", data);
     const { useroncall, signalData } = data;
-    console.log("usersonccall", useroncall);
+
+    
+    
     if (useroncall && useroncall.id) {
       const userdetails = users.get(socket.id);
       //console.log("userdetails", userdetails, useroncall);
@@ -541,22 +550,111 @@ io.on("connection", (socket) => {
       }
     }
   });
-  
+
   socket.on("answer-call", (data) => {
+    console.log("dddddddddddda",data.to,socket.id);
+    let current = users.get(socket.id);
+    let usersWithSameParent=[] 
+    
+    
+    //console.log("usersonccall", users);
+    users.forEach((value, key) => {
+      //console.log("valueparent", value.parentId,useroncall);
+      if(key===data.to||key===socket.id){
+        callingsockets.push(key);
+      }
+      if(current.parentId===value.parentId){
+        //console.log("datasocket", value.socketId);
+        usersWithSameParent.push((value.socketId));
+      }
+    });
+    console.log("ddddooooooooo", usersWithSameParent);
+    for (let i=0;i<usersWithSameParent.length;i++){
+      console.log("userswithsame", usersWithSameParent[i]);
+      io.to(usersWithSameParent[i]).emit("i am on call",callingsockets);
+    }
     io.to(data.to).emit("call-accepted", data.signal);
   });
 
   socket.on("end-call", (targetUserId) => {
     //console.log("targetuserid", targetUserId, users);
+
+    let usersWithSameParent=[] 
+    //let callingsockets =[];
+    let current = users.get(socket.id);
+    //console.log("usersonccall", users);
+    users.forEach((value, key) => {
+      //console.log("valueparent", value.parentId,useroncall);
+      
+      if(current.parentId===value.parentId){
+        //console.log("datasocket", value.socketId);
+        usersWithSameParent.push((value.socketId));
+      }
+    });
+    console.log("ddddooooooooo", usersWithSameParent);
+    
+  
     const targetSockets = Array.from(users.values())
       .filter((user) => user.id === targetUserId) // Find all users that match the condition
       .map((user) => user.socketId); // Extract their socketIds
+    console.log("targetsockets", targetSockets, socket.id);
+    for (let i=0;i<usersWithSameParent.length;i++){
+      console.log("userswithsame", usersWithSameParent[i]);
+      io.to(usersWithSameParent[i]).emit("call-list-update",socket.id,targetSockets);
+    }
 
     // Emit to each socketId that satisfies the condition
     targetSockets.forEach((socketId) => {
+      for(let i=0;i<callingsockets.length;i++){
+        if(callingsockets[i]===socketId){
+          callingsockets.splice(i,1);
+        }
+      }
       io.to(socketId).emit("call-ended", socket.id);
     });
   });
+  
+// Group call initiation
+socket.on("start-group-call", async ({ groupId, signalData }) => {
+  console.log(`User ${socket.id} is starting a group call in group ${groupId}`);
+  const group = await Group.findOne({ id: groupId });
+  if (group) {
+    group.members.forEach((memberId) => {
+      const memberSocket = Array.from(users.values()).find(user => user.id === memberId)?.socketId;
+      if (memberSocket && memberSocket !== socket.id) {
+        console.log(`Notifying group member ${memberSocket} about the group call`);
+        io.to(memberSocket).emit("incoming-group-call", {
+          signal: signalData,
+          from: socket.id,
+          groupId: groupId,
+        });
+      }
+    });
+  }
+});
+
+// Group call acceptance
+socket.on("answer-group-call", (data) => {
+  console.log(`User ${socket.id} answered group call from ${data.to}`);
+  io.to(data.to).emit("group-call-accepted", data.signal);
+});
+
+// Group call disconnection
+socket.on("end-group-call", (groupId) => {
+  console.log(`User ${socket.id} ended the group call in group ${groupId}`);
+  const group = groups.get(groupId);
+  if (group) {
+    group.members.forEach((memberId) => {
+      const memberSocket = Array.from(users.values()).find(user => user.id === memberId)?.socketId;
+      if (memberSocket) {
+        console.log(`Notifying group member ${memberSocket} that the group call ended`);
+        io.to(memberSocket).emit("group-call-ended");
+      }
+    });
+  }
+});
+
+  
 
   socket.on("disconnect", async () => {
     const user = users.get(socket.id);
