@@ -428,7 +428,7 @@ const ChatWindow = (userid) => {
   //   //console.log("userid", userid)
   // },[userid])
   useEffect(() => {
-    const newSocket = io("https://chatplugin-74io.onrender.com");
+    const newSocket = io("https://slack-clone-yxgl.onrender.com");
     setSocket(newSocket);
     newSocket.on("connect", () => setIsConnected(true));
     newSocket.on("disconnect", () => {
