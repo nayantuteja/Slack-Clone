@@ -1,3 +1,4 @@
+
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -23,12 +24,12 @@ const peerServer = ExpressPeerServer(server, {
 app.use("/peerjs", peerServer);
 
 // MongoDB connection setup
-const mongoURI =
-  "mongodb+srv://nayantuteja:00hofBhyJnOOx5Mr@cluster0.ov6sp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const mongoURI = process.env.MONGO_URI;
 mongoose
   .connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err));
+
 // Define MongoDB Schemas and Models
 const userSchema = new mongoose.Schema({
   id: String,
@@ -44,6 +45,10 @@ const groupSchema = new mongoose.Schema({
   members: [String],
   parentId: String,
   createdBy: String,
+  oncall: {
+    type: [String], // Array of user IDs currently on call
+    default: [], // Initialize as an empty array
+  },
 });
 
 const messageSchema = new mongoose.Schema({
@@ -61,6 +66,55 @@ const Message = mongoose.model("Message", messageSchema);
 const users = new Map();
 const groups = new Map();
 let callingsockets = [];
+let groupsoncall = [];
+
+const removeOnCallUser = async (groupId, userId, socketid) => {
+  try {
+    const updatedGroup = await Group.findOneAndUpdate(
+      { id: groupId }, // Find the group by the custom `id`
+      { $pull: { oncall: userId } }, // Remove the userId from the oncall array
+      { new: true } // Return the updated document
+    );
+
+    // if (updatedGroup) {
+    //   console.log(
+    //     `Removed user ${userId} from oncall for group ${groupId}:`,
+    //     updatedGroup
+    //   );
+    // } else {
+    //   console.error(
+    //     "Failed to update group or group not found with id:",
+    //     groupId
+    //   );
+    // }
+  } catch (error) {
+    console.error("Error removing oncall user:", error);
+  }
+
+  const group = await Group.findOne({ id: groupId });
+  const userdata = users.get(socketid);
+  const usersWithSameParent = [];
+  
+  users.forEach((value, key) => {
+    //console.log("valueparent", value.parentId,useroncall);
+
+    if (userdata.parentId === value.parentId) {
+      //console.log("datasocket", value.socketId);
+      
+      usersWithSameParent.push(value.socketId);
+    }
+  });
+
+  usersWithSameParent.forEach(async(socket) => {
+    //const user = users.get(socket.id);
+    //if (user && user.parentId === parentId) {
+    const u= users.get(socket);
+    const groupList = await Group.find({ members: { $in: u.id } });
+    //console.log("userswithsameparent", groupList,u);
+    io.to(socket).emit("group list", groupList);
+    //}
+  });
+};
 
 // Dummy database
 const dummyEmployees = {
@@ -84,6 +138,7 @@ const dummyEmployees = {
     { "name": "Rachel Robinson", "catcher_id": "CATCHER017", "parent_id": "CATCHER015", "type_id": 0 }
   ]
 };
+
 const updateUserList = async (parentId) => {
   const userList = dummyEmployees.employees
     .filter((emp) => emp.parent_id === parentId)
@@ -227,6 +282,7 @@ io.on("connection", (socket) => {
       members: groupData.members,
       parentId: user.parentId,
       createdBy: user.id,
+      oncall: [],
     };
     //console.log("group created", newGroup);
 
@@ -358,7 +414,7 @@ io.on("connection", (socket) => {
           io.to(socketId).emit("removed from group", groupId);
         });
 
-        console.log(`User ${userId} removed from group ${groupId}`);
+        //console.log(`User ${userId} removed from group ${groupId}`);
       } else {
         socket.emit(
           "error",
@@ -431,89 +487,52 @@ io.on("connection", (socket) => {
   });
 
   socket.on("chat message", async (messageData) => {
-    // console.log("messagedata", messageData);
-    //console.log("userssss", users);
     const sender = users.get(socket.id);
     if (!sender) return;
-
+ 
     const { receiver, chatId, text } = messageData;
     const newMessage = new Message({
-      text,
-      sender: sender.id,
-      receiver: receiver || null,
-      chatId,
+        text,
+        sender: sender.id,
+        receiver: receiver || null,
+        chatId,
     });
+   
     await newMessage.save();
-    //console.log("Message saved:", newMessage);
-
+   
+    // Add the `createdAt` field (timestamp) to the messageData before sending it to clients
+    const messageToSend = {
+        ...messageData,
+        createdAt: newMessage.createdAt // Include the timestamp from the saved message
+    };
+ 
     if (chatId.startsWith("group-")) {
-      const groupId = chatId.split("group-")[1];
-      const group = groups.get(groupId);
-      //console.log("groups", groups, group);
-
-      if (
-        group &&
-        group.members.includes(sender.id) &&
-        group.parentId === sender.parentId
-      ) {
-        group.members.forEach((memberId) => {
-          const member = Array.from(users.values()).find(
-            (u) => u.id === memberId
-          );
-          const members = Array.from(users.values()).filter(
-            (u) => u.id === memberId
-          );
-          if (members.length > 0) {
-            members.forEach((member) => {
-              if (member.socketId) {
-                io.to(member.socketId).emit("chat message", messageData);
-              }
+        const groupId = chatId.split("group-")[1];
+        const group = groups.get(groupId);
+ 
+        if (group && group.members.includes(sender.id) && group.parentId === sender.parentId) {
+            group.members.forEach((memberId) => {
+                const member = Array.from(users.values()).find(u => u.id === memberId);
+                if (member && member.socketId) {
+                    io.to(member.socketId).emit("chat message", messageToSend); // Send message with timestamp
+                }
             });
-          } else {
-            if (member && member.socketId) {
-              io.to(member.socketId).emit("chat message", messageData);
-            }
-          }
-          //console.log("group-menber", member);
-        });
-      }
-    } else if (chatId === `employer-${sender.parentId}`) {
-      io.to(chatId).emit("chat message", messageData);
-    } else if (receiver) {
-      const receiverSocket = Array.from(users.values()).find(
-        (user) => user.id === receiver && user.parentId === sender.parentId
-      )?.socketId;
-
-      //console.log("uuuuusss", users);
-      const receiverSockets = Array.from(users.values())
-        .filter((user) => user.id === receiver)
-        .map((user) => user.socketId);
-      //console.log("sssennnderrr", sender);
-      const senderSockets = Array.from(users.values())
-        .filter((user) => user.id === sender.id)
-        .map((user) => user.socketId);
-
-      //console.log("seeeendeerr", senderSockets, receiverSockets);
-      if (receiverSockets.length > 0) {
-        receiverSockets.forEach((socketId) => {
-          io.to(socketId).emit("chat message", messageData);
-        });
-        senderSockets.forEach((socketId) => {
-          io.to(socketId).emit("chat message", messageData);
-        });
-        // Sending the message to the sender as well
-        //console.log("sendersockets", senderSockets);
-        //io.to(socket.id).emit("chat message", messageData);
-      } else {
-        // console.log("receiversocekt", receiverSocket, users);
-        // console.log("recdeiver", receiver);
-        if (receiverSocket) {
-          io.to(receiverSocket).emit("chat message", messageData);
-          io.to(socket.id).emit("chat message", messageData);
         }
-      }
+    } else if (chatId === `employer-${sender.parentId}`) {
+        io.to(chatId).emit("chat message", messageToSend); // Send message with timestamp
+    } else if (receiver) {
+        const receiverSocket = Array.from(users.values()).find(user => user.id === receiver && user.parentId === sender.parentId)?.socketId;
+        const receiverSockets = Array.from(users.values()).filter(user => user.id === receiver).map(user => user.socketId);
+        const senderSockets = Array.from(users.values()).filter(user => user.id === sender.id).map(user => user.socketId);
+ 
+        receiverSockets.forEach(socketId => {
+            io.to(socketId).emit("chat message", messageToSend); // Send message with timestamp
+        });
+        senderSockets.forEach(socketId => {
+            io.to(socketId).emit("chat message", messageToSend); // Send message to sender with timestamp
+        });
     }
-  });
+});
 
   socket.on("fetch chat history", async (chatId) => {
     const chatHistory = await Message.find({ chatId }).sort({ createdAt: 1 });
@@ -564,36 +583,32 @@ io.on("connection", (socket) => {
   });
 
   socket.on("answer-call", (data) => {
-    console.log("dddddddddddda", data.to, socket.id, data.groupcall);
+    //console.log("dddddddddddda", data.to, socket.id, data.groupcall);
     let current = users.get(socket.id);
 
-    let usersWithSameParent = []
-
-
+    let usersWithSameParent = [];
     //console.log("usersonccall", users);
     users.forEach((value, key) => {
       //console.log("valueparent", value.parentId,useroncall);
       if (data.groupcall) {
-        console.log("vvvvvvvvvvvvvv", value);
+        //console.log("vvvvvvvvvvvvvv", value);
         if (value.id === data.to || key === socket.id) {
-          console.log("111", key);
+          //console.log("111", key);
           callingsockets.push(key);
         }
-      }
-      else {
+      } else {
         if (key === data.to || key === socket.id) {
           callingsockets.push(key);
-          console.log("22222", key);
+          //console.log("22222", key);
         }
       }
-
 
       if (current.parentId === value.parentId) {
         //console.log("datasocket", value.socketId);
-        usersWithSameParent.push((value.socketId));
+        usersWithSameParent.push(value.socketId);
       }
     });
-    console.log("ddddooooooooo", usersWithSameParent, callingsockets);
+    //console.log("ddddooooooooo", usersWithSameParent, callingsockets);
     for (let i = 0; i < usersWithSameParent.length; i++) {
       //console.log("userswithsame", usersWithSameParent[i]);
       io.to(usersWithSameParent[i]).emit("i am on call", callingsockets);
@@ -601,62 +616,173 @@ io.on("connection", (socket) => {
     if (!data.groupcall) {
       io.to(data.to).emit("call-accepted", data.signal);
     }
-
   });
 
   socket.on("end-call", (targetUserId, data2) => {
-
+    let current = users.get(socket.id);
     if (data2) {
+      
       targetUserId = targetUserId.userid;
+      removeOnCallUser(data2.id, current.id, socket.id);
     }
     console.log("targetuserid", targetUserId, data2);
-    let usersWithSameParent = []
+    let usersWithSameParent = [];
     //let callingsockets =[];
-    let current = users.get(socket.id);
+
     //console.log("usersonccall", users);
     users.forEach((value, key) => {
       //console.log("valueparent", value.parentId,useroncall);
 
       if (current.parentId === value.parentId) {
         //console.log("datasocket", value.socketId);
-        usersWithSameParent.push((value.socketId));
+        usersWithSameParent.push(value.socketId);
       }
     });
     //console.log("ddddooooooooo", usersWithSameParent);
 
-
     const targetSockets = Array.from(users.values())
       .filter((user) => user.id === targetUserId) // Find all users that match the condition
       .map((user) => user.socketId); // Extract their socketIds
-    console.log("targetsockets", targetSockets);
+    //console.log("targetsockets", targetSockets, users);
     for (let i = 0; i < usersWithSameParent.length; i++) {
       //console.log("userswithsame", usersWithSameParent[i]);
-      io.to(usersWithSameParent[i]).emit("call-list-update", socket.id, targetSockets);
+      io.to(usersWithSameParent[i]).emit("call-ended", socket.id, data2);
+      //console.log("userswithsameparent", usersWithSameParent);
+      io.to(usersWithSameParent[i]).emit(
+        "call-list-update",
+        socket.id,
+        targetSockets
+      );
     }
 
     // Emit to each socketId that satisfies the condition
-    targetSockets.forEach((socketId) => {
-      for (let i = 0; i < callingsockets.length; i++) {
-        if (callingsockets[i] === socketId) {
+    console.log("ttttttttttaaaaaaaaaaaaarrrgegeee", targetSockets, callingsockets);
+
+    // callingsockets.forEach((sid)=>{
+    //   console.log("calling sockets", sid,current.socketId,callingsockets.length);
+    //   if(sid===current.socketId){
+    //     console.log("deleteing sockkettt", sid)
+    //     //callingsockets.splice(i, 1);
+    //   }
+    //   targetSockets.forEach((socketId)=>{
+    //     if(sid===socketId){
+    //       console.log("deleteing sockkettt2", sid)
+    //       //callingsockets.splice(i, 1);
+    //     }
+
+    //   })
+
+    // })
+    // for(let i=0;i<callingsockets.length;i++){
+    //   console.log("222")
+    //   if(sid===current.socketId){
+    //     console.log("deleteing sockkettt", sid)
+    //     callingsockets.splice(i, 1);
+    //   }
+    //   targetSockets.forEach((socketId)=>{
+    //     if(sid===socketId){
+    //       console.log("deleteing sockkettt2", sid)
+    //       callingsockets.splice(i, 1);
+    //     }
+
+    //   })
+    // }
+
+    for(let i=callingsockets.length-1;i>=0;i--){
+      console.log("calling sockets", callingsockets[i],current.socketId,callingsockets.length);
+      if(callingsockets[i]===current.socketId){
+        console.log("deleteing sockkettt", callingsockets[i])
+        callingsockets.splice(i, 1);
+      }
+      targetSockets.forEach((socketId)=>{
+        if(callingsockets[i]===socketId){
+          console.log("deleteing sockkettt2", callingsockets[i],socketId)
           callingsockets.splice(i, 1);
         }
-      }
-      io.to(socketId).emit("call-ended", socket.id);
-    });
+
+      })
+    }
+    // targetSockets.forEach((socketId) => {
+    //   for (let i = 0; i < callingsockets.length; i++) {
+    //     console.log("taageettfesdadsa", socketId, callingsockets[i],current.socketId)
+    //     if (callingsockets[i] === socketId ) {
+    //       console.log("deleteing sockkettt", callingsockets[i])
+    //       callingsockets.splice(i, 1);
+    //     }
+    //     if(callingsockets[i]===current.socketId){
+    //       console.log("deleteing sockkettt", callingsockets[i])
+    //       callingsockets.splice(i,1);
+    //     }
+    //   }
+    // });
   });
 
-  socket.on("group-call", (data1, data2) => {
+  socket.on("group-call", async (data1, data2) => {
     //console.log("group-call", data1,data2);
+    groupsoncall.push(data1.name);
+    //console.log("data1,id", data1.id);
     const currentuser = users.get(socket.id);
     let sockets = [];
+
+    //const group = await Group.findOne({ id: data1.id });
+    try {
+      // Find the group by your custom `id` field
+      const group = await Group.findOne({ id: data1.id });
+
+      if (!group) {
+        console.error("Group not found with id:", data1.id);
+        return; // Exit if the group doesn't exist
+      }
+
+      // Update the group, adding the current user to the `oncall` array
+      const updatedGroup = await Group.findOneAndUpdate(
+        { id: data1.id }, // Use `findOneAndUpdate` instead of `findByIdAndUpdate`
+        { $addToSet: { oncall: currentuser.id } }, // Push current user ID into `oncall` array
+        { new: true } // Return the updated document
+      );
+
+      // if (updatedGroup) {
+      //   console.log("Updated group with new oncall user:", updatedGroup);
+      // } else {
+      //   console.error("Failed to update group with id:", data1.id);
+      // }
+
+      data1.members = updatedGroup.members;
+    } catch (error) {
+      console.error("Error updating oncall users:", error);
+      return; // Exit early if there's an error
+    }
+
+    //data1.members = group.members;
+    let availablesocket = [];
+    //console.log("availablessssssssssssss", data1.members);
+
+    for (let j = 0; j < data1.members.length; j++) {
+      let check = false;
+      for (let i = 0; i < callingsockets.length; i++) {
+        const user = users.get(callingsockets[i]);
+        //console.log("calling socketsssss", user.id, data1.members[j])
+        if (user && data1.members[j] == user.id) {
+          check = true;
+          //console.log("calling socketsssssinnnn", user.id, data1.members[j])
+        }
+      }
+      if (!check) {
+        availablesocket.push(data1.members[j]);
+      }
+    }
+
+    data1.members = availablesocket;
+    //console.log("dddaaaaatttaa11groudpttttttttttttttttttttttttttttttttttt", availablesocket);
     //console.log("cuureeenntuser", currentuser);
     for (let i = 0; i < data1.members.length; i++) {
-
       const userToCall = Array.from(users.values())
         .reverse()
-        .find((user) => user.id === data1.members[i] && user.id != currentuser.id);
+        .find(
+          (user) => user.id === data1.members[i] && user.id != currentuser.id
+        );
       //console.log("usertocall", userToCall);
-      sockets.push(userToCall)
+      sockets.push(userToCall);
     }
     //console.log("socketssss",sockets);
     sockets.forEach((socket) => {
@@ -670,28 +796,54 @@ io.on("connection", (socket) => {
         });
         //io.to(socket.socketId).emit("group-call-incoming",data1.members,currentuser.socketId);
       }
-
-    })
+    });
     // if (userToCall) {
 
     // }
-
-
-  })
-  socket.on("member-call", (data1, data2, member) => {
+  });
+  socket.on("member-call", async (data1, data2, member) => {
     let currentuser = users.get(socket.id);
-    console.log("member-data", data2.data.members, data1, member)
+    //console.log("member-data", data2.data.members, data1, member);
 
     let sockets = [];
     //console.log("cuureeenntuser", currentuser);
     // for(let i=0;i<data2.data.members.length;i++){
+
+    try {
+      // Find the group by your custom `id` field
+      const group = await Group.findOne({ id: data2.data.id });
+
+      if (!group) {
+        console.error("Group not found with id:", data2.data.id);
+        return; // Exit if the group doesn't exist
+      }
+
+      // Update the group, adding the current user to the `oncall` array
+      const updatedGroup = await Group.findOneAndUpdate(
+        { id: data2.data.id }, // Use `findOneAndUpdate` instead of `findByIdAndUpdate`
+        { $addToSet: { oncall: currentuser.id } }, // Push current user ID into `oncall` array
+        { new: true } // Return the updated document
+      );
+
+      // if (updatedGroup) {
+      //   console.log("Updated group with new oncall user:", updatedGroup);
+      // } else {
+      //   console.error("Failed to update group with id:", data1.id);
+      // }
+
+      //data2.members = updatedGroup.members;
+    } catch (error) {
+      console.error("Error updating oncall users:", error);
+      return; // Exit early if there's an error
+    }
+
     const userToCall = Array.from(users.values())
       .reverse()
       .find((user) => user.id === member);
     //console.log("usertocall", userToCall);
-    sockets.push(userToCall)
+    sockets.push(userToCall);
     // }
-    console.log("socketsssss", sockets);
+    //console.log("socketsssss", sockets);
     sockets.forEach((socket) => {
       //console.log("socketsforeach",socket);
       if (socket) {
@@ -701,11 +853,74 @@ io.on("connection", (socket) => {
           useroncall: currentuser,
           data: data2,
         });
-        console.log("dddddddddddddddddddd", socket);
+        //console.log("dddddddddddddddddddd", socket);
         //io.to(socket.socketId).emit("group-call-incoming",data1.members,currentuser.socketId);
       }
+    });
+  });
 
-    })
+  socket.on("join-group-call", async (data1, data2, member) => {
+    let currentuser = users.get(socket.id);
+    //console.log("member-data", data1, data2, member);
+
+    let sockets = [];
+    //console.log("cuureeenntuser", currentuser);
+    // for(let i=0;i<data2.data.members.length;i++){
+
+    try {
+      // Find the group by your custom `id` field
+      const group = await Group.findOne({ id: data2.id });
+
+      if (!group) {
+        console.error("Group not found with id:", data2.id);
+        return; // Exit if the group doesn't exist
+      }
+
+      // Update the group, adding the current user to the `oncall` array
+      const updatedGroup = await Group.findOneAndUpdate(
+        { id: data2.id }, // Use `findOneAndUpdate` instead of `findByIdAndUpdate`
+        { $addToSet: { oncall: currentuser.id } }, // Push current user ID into `oncall` array
+        { new: true } // Return the updated document
+      );
+
+      // if (updatedGroup) {
+      //   console.log("Updated group with new oncall user:", updatedGroup);
+      // } else {
+      //   console.error("Failed to update group with id:", data1.id);
+      // }
+
+      //data2.members = updatedGroup.members;
+    } catch (error) {
+      console.error("Error updating oncall users:", error);
+      return; // Exit early if there's an error
+    }
+
+    const userToCall = Array.from(users.values())
+      .reverse()
+      .find((user) => user.id === member);
+    //console.log("usertocall", userToCall);
+    sockets.push(userToCall);
+    // }
+    //console.log("socketsssss", sockets);
+    sockets.forEach((socket) => {
+      //console.log("socketsforeach",socket);
+      if (socket) {
+        io.to(socket.socketId).emit("member-call-incoming", {
+          signal: data1,
+          from: currentuser.id,
+          useroncall: currentuser,
+          data: data2,
+        });
+        //console.log("dddddddddddddddddddd", socket);
+        //io.to(socket.socketId).emit("group-call-incoming",data1.members,currentuser.socketId);
+      }
+    });
+  });
+  socket.on("group-call-declined", async()=>{
+    const user= users.get(socket.id);
+    const groupList = await Group.find({ members: { $in: user.id } });
+    io.to(socket.id).emit("group list", groupList);
+    //removeOnCallUser(1,2,socket.id);
   })
 
   socket.on("disconnect", async () => {
@@ -713,9 +928,34 @@ io.on("connection", (socket) => {
     if (user) {
       console.log("User disconnected:", user.username);
       users.delete(socket.id);
+
+      try {
+        // Find all groups where the user is currently on call
+        const groupsWithUserOnCall = await Group.find({ oncall: user.id });
+
+        if (groupsWithUserOnCall.length === 0) {
+          console.log(`User ${user.id} is not on call in any group`);
+          return;
+        }
+
+        // Iterate through each group and remove the user from `oncall`
+        for (const group of groupsWithUserOnCall) {
+          await Group.findOneAndUpdate(
+            { id: group.id },
+            { $pull: { oncall: user.id } }, // Remove the user from `oncall`
+            { new: true }
+          );
+          console.log(
+            `Removed user ${user.id} from oncall in group ${group.id}`
+          );
+        }
+      } catch (error) {
+        console.error("Error during user disconnect:", error);
+      }
       // await User.deleteOne({ id: user.id });
       // await updateUserList(user.parentId);
     }
+    users.delete(socket.id);
   });
 });
 
@@ -723,3 +963,4 @@ const PORT = process.env.PORT;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
